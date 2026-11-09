@@ -480,7 +480,7 @@ function readJournalV3(db) {
     return null;
   }
 
-  const messageQuery = db.exec("SELECT id, submitted_eastern, COALESCE(original_text, summary, '') FROM messages ORDER BY submitted_eastern, id");
+  const messageQuery = db.exec("SELECT id, submitted_eastern, COALESCE(original_text, '') || ' ' || COALESCE(summary, '') FROM messages ORDER BY submitted_eastern, id");
   journalMessages = (messageQuery[0]?.values || []).map(([id, submitted, text]) => ({id, date: String(submitted).slice(0,10), text: String(text || '')}));
   const query = db.exec(`
     SELECT
