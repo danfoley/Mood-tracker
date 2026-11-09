@@ -530,6 +530,8 @@ $('mood').onchange=renderEntries;
 const GOOGLE_CLIENT_ID =
   '1010337679530-m9239mheeg2khrqq3a40mcmgnj42b2vv.apps.googleusercontent.com';
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+// Known journal file in the user's private Drive. This is an identifier, not a credential.
+const JOURNAL_FILE_ID = '1PfhPdlOuMMWKXUwRY9-KQNYZhvrCBPzu';
 const JOURNAL_FILENAMES = [
   'feelings_journal_v3.sqlite',
   'feelings_journal_v2.sqlite',
@@ -600,24 +602,41 @@ async function findJournalFile(token) {
 }
 
 async function loadJournalFromDrive(token) {
-  setStatus('Connected to Google. Looking for your SQLite journal…');
+  setStatus('Connected to Google. Opening your known journal file…');
 
-  const file = await findJournalFile(token);
-  if (!file) {
-    throw new Error(
-      'No feelings_journal_v3.sqlite file was found in this Google account. ' +
-      'Check that you selected the account containing your journal.'
+  // Prefer the verified file ID: filename search can be incomplete or ambiguous.
+  // A 403/404 may mean that the signed-in account cannot access this file.
+  let response;
+  try {
+    response = await driveGet(
+      'https://www.googleapis.com/drive/v3/files/' +
+      encodeURIComponent(JOURNAL_FILE_ID) + '?alt=media',
+      token
     );
+    await load(await response.arrayBuffer(), 'Google Drive: feelings_journal_v3.sqlite');
+    return;
+  } catch (directError) {
+    setStatus('Direct file lookup was unsuccessful. Searching your Drive…');
+    try {
+      const file = await findJournalFile(token);
+      if (!file) {
+        throw new Error(
+          'The known database could not be opened (' + directError.message +
+          '), and no matching journal file was found. Check that you selected ' +
+          'the Google account that owns the Feelings Journal folder.'
+        );
+      }
+
+      const fallback = await driveGet(
+        'https://www.googleapis.com/drive/v3/files/' +
+        encodeURIComponent(file.id) + '?alt=media',
+        token
+      );
+      await load(await fallback.arrayBuffer(), 'Google Drive: ' + file.name);
+    } catch (searchError) {
+      throw new Error(searchError.message);
+    }
   }
-
-  setStatus('Found ' + file.name + '. Loading your journal…');
-  const response = await driveGet(
-    'https://www.googleapis.com/drive/v3/files/' +
-      encodeURIComponent(file.id) + '?alt=media',
-    token
-  );
-
-  await load(await response.arrayBuffer(), 'Google Drive: ' + file.name);
 }
 
 $('drive').onclick = () => {
