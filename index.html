@@ -540,9 +540,8 @@ $('observations').textContent=records.filter(x=>x.rating!=null).length;
 let max=dates.at(-1),period=Number($('period').value);
 let cutoff=period?new Date(max+'T12:00:00'):null;
 if(cutoff)cutoff.setDate(cutoff.getDate()-period+1);
-let shown=dates.filter(d=>!cutoff||new Date(d+'T12:00:00')>=cutoff);
-plot('trend','line',shown,shown.map(d=>{let a=records.filter(r=>r.date===d&&r.rating!=null).map(r=>r.rating);
-return a.length?a.reduce((x,y)=>x+y,0)/a.length:null}),{scales:{y:{min:1,max:5,ticks:{stepSize:1}}}});
+let shown=records.filter(r=>r.rating!=null&&(!cutoff||new Date(r.date+'T12:00:00')>=cutoff)).sort((a,b)=>(a.date+'T'+a.time).localeCompare(b.date+'T'+b.time));
+plot('trend','line',shown.map(r=>r.date.slice(5)+(r.time?' '+r.time:' (time unknown)')),shown.map(r=>r.rating),{scales:{y:{min:1,max:5,ticks:{stepSize:1}}}});
 let labels=['Bad','Getting better','Better / okay','Good','Very good'];
 plot('distribution','doughnut',labels,[1,2,3,4,5].map(n=>records.filter(r=>r.rating===n).length));
 let old=$('day').value;
@@ -554,8 +553,14 @@ $('mood').replaceChildren(new Option('All moods',''),...moods.map(m=>new Option(
 $('mood').value=filter;
 renderDay();
 renderEntries()}
-function renderDay(){let r=records.filter(x=>x.date===$('day').value&&x.time&&x.rating!=null).sort((a,b)=>a.time.localeCompare(b.time));
-plot('intraday','line',r.map(x=>x.time),r.map(x=>x.rating),{scales:{y:{min:1,max:5,ticks:{stepSize:1}}}})}
+function renderDay(){
+const all=records.filter(r=>r.date===$('day').value).sort((a,b)=>a.time.localeCompare(b.time));
+const rated=all.filter(r=>r.rating!=null);
+plot('intraday','line',rated.map((r,i)=>r.time||'Time unknown '+(i+1)),rated.map(r=>r.rating),{scales:{y:{min:1,max:5,ticks:{stepSize:1}}}});
+let detail=$('day-details');
+if(!detail){detail=document.createElement('p');detail.id='day-details';detail.className='small';$('intraday').parentElement.insertAdjacentElement('afterend',detail)}
+detail.textContent=all.length+' observations on this date; '+rated.length+' with recorded mood ratings. Unrated observations remain in the journal.';
+}
 function renderEntries(){let q=$('search').value.toLowerCase(),m=$('mood').value;
 let filtered=records.filter(r=>(!m||r.mood===m)&&(!q||(r.note+' '+r.date+' '+r.mood).toLowerCase().includes(q))).sort((a,b)=>(b.date+' '+b.time).localeCompare(a.date+' '+a.time));
 $('entries').replaceChildren(...filtered.slice(0,250).map(r=>{let div=document.createElement('div');
