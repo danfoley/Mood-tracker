@@ -690,7 +690,53 @@ async function loadJournalFromDrive(token) {
   }
 }
 
-$('drive').onclick = () => {
+// Remember that this browser has connected before, but never persist a Google
+// access token across browser sessions. A short-lived token may be reused within
+// the current tab session until it expires.
+const DRIVE_CONNECTED_KEY = 'stillwater_drive_connected';
+const DRIVE_TOKEN_KEY = 'stillwater_drive_session';
+
+function cachedDriveToken() {
+  try {
+    const session = JSON.parse(sessionStorage.getItem(DRIVE_TOKEN_KEY) || 'null');
+    if (session && session.expiresAt > Date.now() + 60000) return session.token;
+  } catch (_) {
+    // Ignore malformed or unavailable session storage.
+  }
+  sessionStorage.removeItem(DRIVE_TOKEN_KEY);
+  return null;
+}
+
+function rememberDriveToken(response) {
+  const expiresIn = Number(response.expires_in) || 3600;
+  try {
+    sessionStorage.setItem(DRIVE_TOKEN_KEY, JSON.stringify({
+      token: response.access_token,
+      expiresAt: Date.now() + expiresIn * 1000
+    }));
+    localStorage.setItem(DRIVE_CONNECTED_KEY, 'true');
+  } catch (_) {
+    // Browser storage is optional; sign-in still works without it.
+  }
+}
+
+async function openDriveWithToken(token) {
+  try {
+    await loadJournalFromDrive(token);
+  } catch (error) {
+    // If a saved token was revoked or expired, don't retry it.
+    sessionStorage.removeItem(DRIVE_TOKEN_KEY);
+    setStatus('Could not load your Google Drive journal: ' + error.message);
+  }
+}
+
+function connectDrive() {
+  const existingToken = cachedDriveToken();
+  if (existingToken) {
+    openDriveWithToken(existingToken);
+    return;
+  }
+
   if (!window.google?.accounts?.oauth2) {
     setStatus('Google sign-in is still loading. Please try again.');
     return;
@@ -700,29 +746,40 @@ $('drive').onclick = () => {
     driveTokenClient = google.accounts.oauth2.initTokenClient({
       client_id: GOOGLE_CLIENT_ID,
       scope: DRIVE_SCOPE,
-      callback: async (response) => {
+      callback: async response => {
         if (response.error || !response.access_token) {
           setStatus('Google sign-in was not completed: ' +
             (response.error_description || response.error || 'No access token'));
           return;
         }
 
-        try {
-          await loadJournalFromDrive(response.access_token);
-        } catch (error) {
-          setStatus('Could not load your Google Drive journal: ' + error.message);
-        }
+        rememberDriveToken(response);
+        await openDriveWithToken(response.access_token);
       },
-      error_callback: (error) => {
+      error_callback: error => {
         setStatus('Google sign-in did not finish: ' +
           (error.message || error.type || 'Popup closed or blocked'));
       }
     });
   }
 
-  setStatus('Opening Google account selection…');
-  // Called directly in a click handler to avoid popup blockers.
-  driveTokenClient.requestAccessToken({ prompt: 'select_account consent' });
-};
+  setStatus('Connecting to Google Drive…');
+  // For returning users, do not force the account chooser and consent screen
+  // every time. Google may still show a popup when reauthorization is required.
+  const returning = localStorage.getItem(DRIVE_CONNECTED_KEY) === 'true';
+  driveTokenClient.requestAccessToken({
+    prompt: returning ? '' : 'select_account consent'
+  });
+}
+
+$('drive').onclick = connectDrive;
+
+// Restore the current tab's unexpired session automatically on page reload.
+// A new browser session may still require a user click for Google OAuth.
+if (cachedDriveToken()) {
+  openDriveWithToken(cachedDriveToken());
+} else if (localStorage.getItem(DRIVE_CONNECTED_KEY) === 'true') {
+  setStatus('Previously connected to Google Drive. Click Connect Google Drive to restore access.');
+}
 </script></body>
 </html>
