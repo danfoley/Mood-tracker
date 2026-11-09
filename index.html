@@ -550,12 +550,56 @@ let numeric=Number(m);
 let rating=moodScore(m)??(m.trim()!==''&&Number.isFinite(numeric)&&numeric>=1&&numeric<=5?numeric:null);
 results.push({date:d,time:clean(val(timeCol))||clean(val(dateCol)).match(/\d{2}:\d{2}(?::\d{2})?/)?.[0]||'',mood:m,note:clean(val(noteCol)),rating,source:table})}}if(!results.length)throw Error('No recognized journal entries found. Database tables: '+names.join(', '));
 return results}
+// Browser-local SQLite snapshot. No OAuth tokens are persisted here.
+const JOURNAL_CACHE_DB = 'stillwater_private_journal';
+function journalCache() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(JOURNAL_CACHE_DB, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('snapshots');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+async function saveJournalSnapshot(bytes) {
+  const db = await journalCache();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('snapshots', 'readwrite');
+    tx.objectStore('snapshots').put({ bytes, savedAt: Date.now() }, 'latest');
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+async function restoreJournalSnapshot() {
+  try {
+    const db = await journalCache();
+    const snapshot = await new Promise((resolve, reject) => {
+      const tx = db.transaction('snapshots', 'readonly');
+      const request = tx.objectStore('snapshots').get('latest');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    db.close();
+    if (!snapshot) return false;
+    const loaded = await load(snapshot.bytes, 'private browser cache');
+    if (loaded) setStatus('Showing your saved journal from ' +
+      new Date(snapshot.savedAt).toLocaleString() +
+      '. Connect Google Drive to check for newer entries.');
+    return loaded;
+  } catch (_) { return false; }
+}
+async function loadFromDriveAndCache(bytes, label) {
+  const loaded = await load(bytes, label);
+  if (loaded) {
+    try { await saveJournalSnapshot(bytes); } catch (_) { /* Private browsing may block storage. */ }
+  }
+  return loaded;
+}
 async function load(bytes,label){try{let SQL=await initSqlJs({locateFile:file=>'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/'+file});
 let db=new SQL.Database(new Uint8Array(bytes));
 records=readDb(db);
 db.close();
 $('status').textContent='Loaded '+records.length+' entries from '+label+'. All data stays in your browser.';
-render()}catch(e){$('status').textContent='Could not load database: '+e.message}}
+render();return true}catch(e){$('status').textContent='Could not load database: '+e.message;return false}}
 function plot(id,type,labels,values,options={}){graphs[id]?.destroy();
 graphs[id]=new Chart($(id),{type,data:{labels,datasets:[{label:'Mood',data:values,borderColor:'#5676b0',backgroundColor:type==='doughnut'?['#b45d70','#dca36b','#7ca8bb','#70ab8e','#427d72']:'#5676b0',tension:.25,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:type==='doughnut'}},...options}})}
 function render(){let dates=[...new Set(records.map(x=>x.date))].sort();
@@ -779,7 +823,7 @@ async function loadJournalFromDrive(token) {
       encodeURIComponent(JOURNAL_FILE_ID) + '?alt=media',
       token
     );
-    await load(await response.arrayBuffer(), 'Google Drive: feelings_journal_v3.sqlite');
+    if (!await loadFromDriveAndCache(await response.arrayBuffer(), 'Google Drive: feelings_journal_v3.sqlite')) throw new Error('Invalid SQLite journal');
     return;
   } catch (directError) {
     setStatus('Direct file lookup was unsuccessful. Searching your Drive…');
@@ -798,7 +842,7 @@ async function loadJournalFromDrive(token) {
         encodeURIComponent(file.id) + '?alt=media',
         token
       );
-      await load(await fallback.arrayBuffer(), 'Google Drive: ' + file.name);
+      if (!await loadFromDriveAndCache(await fallback.arrayBuffer(), 'Google Drive: ' + file.name)) throw new Error('Invalid SQLite journal');
     } catch (searchError) {
       throw new Error(searchError.message);
     }
@@ -889,12 +933,16 @@ function connectDrive() {
 
 $('drive').onclick = connectDrive;
 
-// Restore the current tab's unexpired session automatically on page reload.
-// A new browser session may still require a user click for Google OAuth.
-if (cachedDriveToken()) {
-  openDriveWithToken(cachedDriveToken());
-} else if (localStorage.getItem(DRIVE_CONNECTED_KEY) === 'true') {
-  setStatus('Previously connected to Google Drive. Click Connect Google Drive to restore access.');
-}
+// Open the last private browser copy immediately, even after closing the browser.
+// Refresh from Drive automatically only while a valid OAuth token is available.
+(async () => {
+  await restoreJournalSnapshot();
+  const token = cachedDriveToken();
+  if (token) {
+    await openDriveWithToken(token);
+  } else if (!records.length) {
+    setStatus('Connect Google Drive once to save a private local copy of your journal.');
+  }
+})();
 </script></body>
 </html>
