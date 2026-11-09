@@ -332,14 +332,14 @@ h1 {
 </div>
 
 <div class="actions">
-<button id="drive">Connect Google Drive</button>
+<button id="drive">Choose from Google Drive</button>
 <button id="open" class="alt">Open SQLite file</button>
 <input id="file" class="hidden" type="file" accept=".sqlite,.db,.sqlite3,application/octet-stream">
 </div>
 
 </header>
 
-<div id="status" class="notice" role="status">A quiet place to notice patterns over time. Open your private journal to begin — nothing is stored on GitHub.</div>
+<div id="status" class="notice" role="status">A quiet place to notice patterns over time. Choose your SQLite journal from Google Drive or your device — nothing is stored on GitHub.</div>
 
 <section class="grid">
 <div class="card">
@@ -433,28 +433,11 @@ h1 {
 
 </section>
 
-<p class="notice small">Privacy: all SQLite processing occurs locally in your browser. Google Drive is accessed only with your own Google authorization. Nothing is sent to GitHub. This app currently reads your journal; it does not modify the original database.</p>
+<p class="notice small">Privacy: all SQLite processing occurs locally in your browser. Google Drive files are selected through your device’s file picker; no OAuth client ID is required. Nothing is sent to GitHub. This app currently reads your journal; it does not modify the original database.</p>
 
 </main>
 
-<dialog id="settings">
-<form method="dialog">
-<h2>Connect Google Drive</h2>
 
-<p class="sub">Create a Google Cloud OAuth Web client for this site's origin, enable the Google Drive API, and authorize read-only access. The client ID is not a password.</p>
-
-<label>OAuth client ID</label>
-<input id="client" placeholder="...apps.googleusercontent.com">
-<label>SQLite file ID in Google Drive</label>
-<input id="fileid" placeholder="ID from Drive file URL">
-<div class="actions" style="margin-top:18px">
-<button class="alt" value="cancel">Cancel</button>
-<button id="authorize" value="connect">Sign in & load</button>
-</div>
-
-</form>
-
-</dialog>
 
 <script>
 // Journal content stays in memory; no private records are committed to GitHub.
@@ -543,20 +526,12 @@ $('period').onchange=()=>records.length&&render();
 $('day').onchange=renderDay;
 $('search').oninput=renderEntries;
 $('mood').onchange=renderEntries;
-$('drive').onclick=()=>{$('client').value=localStorage.getItem('mood_oauth_client')||'';
-$('fileid').value=localStorage.getItem('mood_file_id')||'';
-$('settings').showModal()};
-$('authorize').onclick=e=>{e.preventDefault();
-let client=$('client').value.trim(),id=$('fileid').value.trim();
-if(!client||!id)return alert('Enter both fields');
-if(!window.google?.accounts?.oauth2)return alert('Google sign-in is loading. Please try again.');
-localStorage.setItem('mood_oauth_client',client);
-localStorage.setItem('mood_file_id',id);
-let auth=google.accounts.oauth2.initTokenClient({client_id:client,scope:'https://www.googleapis.com/auth/drive.readonly',callback:async result=>{if(result.error)return alert(result.error);
-try{let res=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media',{headers:{Authorization:'Bearer '+result.access_token}});
-if(!res.ok)throw Error('Drive returned '+res.status);
-await load(await res.arrayBuffer(),'private Google Drive SQLite');
-$('settings').close()}catch(err){$('status').textContent='Drive connection failed: '+err.message}}});
-auth.requestAccessToken()};
+// The Android/Chrome system file picker can browse Google Drive accounts.
+// This avoids asking the user to configure a Google OAuth application.
+// Browsers do not permit a static site to silently read private Drive files.
+$('drive').onclick = () => {
+  $('status').textContent = 'Select your Google Drive account in the file picker, then choose your private .sqlite journal file. On Android, open the file picker menu and select Drive.';
+  $('file').click();
+};
 </script></body>
 </html>
