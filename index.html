@@ -453,6 +453,27 @@ function moodScore(m){let s=clean(m).trim().toLowerCase();
 return Object.prototype.hasOwnProperty.call(mapping,s)?mapping[s]:null}
 // The authoritative journal schema stores mood observations separately from messages.
 // Use observations as the unit of analysis so multiple feelings in one day are preserved.
+
+// Inference is display-only: the original SQLite journal is never changed.
+// Only unmistakable emotional language is mapped; ambiguous text stays unrated.
+function inferMood(description) {
+  const text = String(description || '').toLowerCase();
+  if (/crying|cried|very sad|sad|lonely|grief|anxiety attack|scared|fear of being alone|emotionally exhausted|disappointed|grumpy/.test(text)) {
+    if (/feels okay when|felt good|feels good/.test(text)) return null;
+    return { label: 'Bad', score: 1 };
+  }
+  if (/felt good|feels good|felt happy|feel happiest|excited about|feels okay|felt okay/.test(text)) {
+    return { label: 'Good', score: 4 };
+  }
+  return null;
+}
+const MOOD_SCALE = {
+  1: 'Bad — sad, distressed or struggling',
+  2: 'Getting better — still low, but improving',
+  3: 'Okay / Better — manageable or neutral',
+  4: 'Good — positive, content or enjoying things',
+  5: 'Very good — especially happy or energized'
+};
 function readJournalV3(db) {
   const tables = db.exec(
     "SELECT name FROM sqlite_master WHERE type = 'table'"
@@ -468,6 +489,7 @@ function readJournalV3(db) {
       o.mood_category,
       o.description,
       o.mood_confidence,
+      o.time_precision,
       m.summary,
       m.original_text,
       m.submitted_eastern
@@ -479,15 +501,21 @@ function readJournalV3(db) {
   if (!query.length) return [];
 
   return query[0].values.map(row => {
-    const [observedAt, mood, description, confidence, summary, original, submittedAt] = row;
+    const [observedAt, mood, description, confidence, precision, summary, original, submittedAt] = row;
     const timestamp = String(observedAt || submittedAt || '');
     const moodLabel = String(mood || '').trim();
-    const score = moodScore(moodLabel);
+    const inference = moodLabel ? null : inferMood(description);
+    const score = moodScore(moodLabel) ?? inference?.score ?? null;
+    const estimated = !moodLabel && inference != null;
+    const historical = !observedAt;
 
     return {
       date: timestamp.slice(0, 10),
-      time: (timestamp.match(/T(\d{2}:\d{2})/) || [])[1] || '',
-      mood: moodLabel,
+      time: historical ? '' : (timestamp.match(/T(\d{2}:\d{2})/) || [])[1] || '',
+      mood: moodLabel || inference?.label || '',
+      estimated,
+      historical,
+      precision: String(precision || ''),
       note: String(description || summary || original || ''),
       rating: score,
       confidence: String(confidence || ''),
@@ -540,26 +568,41 @@ $('observations').textContent=records.filter(x=>x.rating!=null).length;
 let max=dates.at(-1),period=Number($('period').value);
 let cutoff=period?new Date(max+'T12:00:00'):null;
 if(cutoff)cutoff.setDate(cutoff.getDate()-period+1);
-let shown=records.filter(r=>r.rating!=null&&(!cutoff||new Date(r.date+'T12:00:00')>=cutoff)).sort((a,b)=>(a.date+'T'+a.time).localeCompare(b.date+'T'+b.time));
-plot('trend','line',shown.map(r=>r.date.slice(5)+(r.time?' '+r.time:' (time unknown)')),shown.map(r=>r.rating),{scales:{y:{min:1,max:5,ticks:{stepSize:1}}}});
+let shown=records.filter(r=>r.rating!=null&&!r.historical&&(!cutoff||new Date(r.date+'T12:00:00')>=cutoff)).sort((a,b)=>(a.date+'T'+a.time).localeCompare(b.date+'T'+b.time));
+plot('trend','line',shown.map(r=>r.date.slice(5)+(r.time?' '+r.time:' (time unknown)')+(r.estimated?' *':'')),shown.map(r=>r.rating),{scales:{y:{min:1,max:5,ticks:{stepSize:1}}}});
 let labels=['Bad','Getting better','Better / okay','Good','Very good'];
 plot('distribution','doughnut',labels,[1,2,3,4,5].map(n=>records.filter(r=>r.rating===n).length));
 let old=$('day').value;
-$('day').replaceChildren(...dates.slice().reverse().map(d=>new Option(d,d)));
-if(dates.includes(old))$('day').value=old;
+const multiDays=dates.filter(d=>records.filter(r=>r.date===d&&r.rating!=null&&!r.historical).length>=2);
+$('day').replaceChildren(...multiDays.slice().reverse().map(d=>new Option(d,d)));
+if(!multiDays.includes(old)) $('day').value=multiDays[0]||'';
+if(multiDays.includes(old))$('day').value=old;
 let moods=[...new Set(records.map(r=>r.mood).filter(Boolean))].sort();
 let filter=$('mood').value;
 $('mood').replaceChildren(new Option('All moods',''),...moods.map(m=>new Option(m,m)));
 $('mood').value=filter;
 renderDay();
 renderEntries()}
-function renderDay(){
-const all=records.filter(r=>r.date===$('day').value).sort((a,b)=>a.time.localeCompare(b.time));
-const rated=all.filter(r=>r.rating!=null);
-plot('intraday','line',rated.map((r,i)=>r.time||'Time unknown '+(i+1)),rated.map(r=>r.rating),{scales:{y:{min:1,max:5,ticks:{stepSize:1}}}});
-let detail=$('day-details');
-if(!detail){detail=document.createElement('p');detail.id='day-details';detail.className='small';$('intraday').parentElement.insertAdjacentElement('afterend',detail)}
-detail.textContent=all.length+' observations on this date; '+rated.length+' with recorded mood ratings. Unrated observations remain in the journal.';
+function renderDay() {
+  const all = records.filter(r => r.date === $('day').value)
+    .sort((a, b) => a.time.localeCompare(b.time));
+  const rated = all.filter(r => r.rating != null && !r.historical);
+  plot('intraday', 'line',
+    rated.map((r, i) => r.time || 'Time unknown ' + (i + 1)),
+    rated.map(r => r.rating),
+    { scales: { y: { min: 1, max: 5, ticks: { stepSize: 1,
+      callback: value => MOOD_SCALE[value] ? value + ' — ' + MOOD_SCALE[value].split(' — ')[0] : value
+    } } } }
+  );
+  let detail = $('day-details');
+  if (!detail) {
+    detail = document.createElement('p');
+    detail.id = 'day-details';
+    detail.className = 'small';
+    $('intraday').parentElement.insertAdjacentElement('afterend', detail);
+  }
+  detail.textContent = all.length + ' journal observations; ' + rated.length +
+    ' dated mood observations, including clearly labeled inferences. Historical notes with unknown event dates are not plotted as timed events.';
 }
 function renderEntries(){let q=$('search').value.toLowerCase(),m=$('mood').value;
 let filtered=records.filter(r=>(!m||r.mood===m)&&(!q||(r.note+' '+r.date+' '+r.mood).toLowerCase().includes(q))).sort((a,b)=>(b.date+' '+b.time).localeCompare(a.date+' '+a.time));
@@ -567,7 +610,7 @@ $('entries').replaceChildren(...filtered.slice(0,250).map(r=>{let div=document.c
 div.className='entry';
 let head=document.createElement('div');
 head.className='small';
-head.textContent=r.date+(r.time?' • '+r.time:'')+' • '+(r.mood||'Unrated');
+head.textContent=r.date+(r.time?' • '+r.time:'')+' • '+(r.mood||'Unrated')+(r.estimated?' (inferred from wording)':'')+(r.historical?' (event date unknown)':'');
 let p=document.createElement('p');
 p.textContent=r.note;
 div.append(head,p);
@@ -578,6 +621,11 @@ $('entries').append(p)}}
 $('open').onclick=()=>$('file').click();
 $('file').onchange=async e=>{let f=e.target.files[0];
 if(f)await load(await f.arrayBuffer(),f.name)};
+// Explain every numerical chart value without requiring the reader to guess.
+const scaleLegend = document.createElement('p');
+scaleLegend.className = 'small';
+scaleLegend.textContent = Object.entries(MOOD_SCALE).map(([score, label]) => score + ' = ' + label).join('  •  ') + '. * indicates inferred mood.';
+$('trend').parentElement.insertAdjacentElement('afterend', scaleLegend);
 $('period').onchange=()=>records.length&&render();
 $('day').onchange=renderDay;
 $('search').oninput=renderEntries;
