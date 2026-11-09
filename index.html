@@ -88,7 +88,7 @@ h2 {
   grid-column:1/-1
 }
 
-.card:has(#distribution),.card:has(#intraday) {
+.card:has(#recovery),.card:has(#intraday) {
   grid-column:span 6
 }
 
@@ -379,17 +379,14 @@ h1 {
 </canvas>
 </div>
 
-<p class="small">Average of recorded mood ratings per day. Missing ratings are not interpreted as neutral.</p>
+<p class="small">Each point represents a recorded mood observation. Inferred moods are marked with an asterisk.</p>
 
 </div>
 
 <div class="card">
-<h2>How days have felt</h2>
-
-<div class="plot">
-<canvas id="distribution">
-</canvas>
-</div>
+<h2>How long until I feel better?</h2>
+<p class="sub">From a Bad observation to the first later Getting better / Better mood, and to Good / Great.</p>
+<div id="recovery" aria-live="polite"></div>
 
 </div>
 
@@ -570,8 +567,7 @@ let cutoff=period?new Date(max+'T12:00:00'):null;
 if(cutoff)cutoff.setDate(cutoff.getDate()-period+1);
 let shown=records.filter(r=>r.rating!=null&&!r.historical&&(!cutoff||new Date(r.date+'T12:00:00')>=cutoff)).sort((a,b)=>(a.date+'T'+a.time).localeCompare(b.date+'T'+b.time));
 plot('trend','line',shown.map(r=>r.date.slice(5)+(r.time?' '+r.time:' (time unknown)')+(r.estimated?' *':'')),shown.map(r=>r.rating),{scales:{y:{min:1,max:5,ticks:{stepSize:1}}}});
-let labels=['Bad','Getting better','Better / okay','Good','Very good'];
-plot('distribution','doughnut',labels,[1,2,3,4,5].map(n=>records.filter(r=>r.rating===n).length));
+renderRecovery();
 let old=$('day').value;
 const multiDays=dates.filter(d=>records.filter(r=>r.date===d&&r.rating!=null&&!r.historical).length>=2);
 $('day').replaceChildren(...multiDays.slice().reverse().map(d=>new Option(d,d)));
@@ -583,6 +579,72 @@ $('mood').replaceChildren(new Option('All moods',''),...moods.map(m=>new Option(
 $('mood').value=filter;
 renderDay();
 renderEntries()}
+function recoveryTime(entry) {
+  // Only event times with explicit clock precision support elapsed-time claims.
+  if (!entry.time || entry.historical ||
+      !/^(exact submission time|submission_timestamp|relative_exact)$/.test(entry.precision)) {
+    return null;
+  }
+  const parsed = new Date(entry.date + 'T' + entry.time + ':00');
+  return Number.isFinite(parsed.getTime()) ? parsed.getTime() : null;
+}
+
+function durationLabel(milliseconds) {
+  const hours = milliseconds / 3600000;
+  return hours < 24 ? hours.toFixed(1) + ' hours' :
+    (hours / 24).toFixed(1) + ' days';
+}
+
+function renderRecovery() {
+  const host = $('recovery');
+  host.replaceChildren();
+  const dated = records.map(entry => ({ ...entry, at: recoveryTime(entry) }))
+    .filter(entry => entry.at !== null && entry.rating != null)
+    .sort((a, b) => a.at - b.at);
+
+  const episodes = [];
+  let active = null;
+  for (const entry of dated) {
+    if (entry.rating === 1) {
+      if (!active) {
+        active = { start: entry, better: null, good: null };
+        episodes.push(active);
+      }
+      continue;
+    }
+    if (!active) continue;
+    if (entry.rating >= 2 && !active.better) active.better = entry;
+    if (entry.rating >= 4) {
+      active.good = entry;
+      active = null;
+    }
+  }
+
+  const times = key => episodes.filter(ep => ep[key]).map(ep => ep[key].at - ep.start.at);
+  const summary = document.createElement('p');
+  summary.className = 'sub';
+  const better = times('better'), good = times('good');
+  const average = arr => durationLabel(arr.reduce((a, b) => a + b, 0) / arr.length);
+  summary.textContent = episodes.length
+    ? 'First observed improvement: ' + (better.length ? average(better) + ' average (' + better.length + ' episodes)' : 'not enough data') +
+      '. First observed Good / Great: ' + (good.length ? average(good) + ' average (' + good.length + ' episodes)' : 'not enough data') + '.'
+    : 'Not enough precisely timed Bad-to-recovery observations yet.';
+  host.append(summary);
+
+  for (const ep of episodes) {
+    const item = document.createElement('p');
+    item.className = 'entry';
+    item.textContent = ep.start.date + ' ' + ep.start.time +
+      ' — first improvement: ' + (ep.better ? durationLabel(ep.better.at - ep.start.at) : 'not observed') +
+      '; Good / Great: ' + (ep.good ? durationLabel(ep.good.at - ep.start.at) : 'not observed');
+    host.append(item);
+  }
+  const caveat = document.createElement('p');
+  caveat.className = 'small';
+  caveat.textContent = 'These are intervals between journal observations, not exact recovery times. Entries with approximate, retrospective, or missing event times are excluded. An unresolved episode is not assumed to have ended.';
+  host.append(caveat);
+}
+
 function renderDay() {
   const all = records.filter(r => r.date === $('day').value)
     .sort((a, b) => a.time.localeCompare(b.time));
