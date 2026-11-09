@@ -332,14 +332,14 @@ h1 {
 </div>
 
 <div class="actions">
-<button id="drive">Choose from Google Drive</button>
+<button id="drive">Connect Google Drive</button>
 <button id="open" class="alt">Open SQLite file</button>
 <input id="file" class="hidden" type="file" accept=".sqlite,.db,.sqlite3,application/octet-stream">
 </div>
 
 </header>
 
-<div id="status" class="notice" role="status">A quiet place to notice patterns over time. Choose your SQLite journal from Google Drive or your device — nothing is stored on GitHub.</div>
+<div id="status" class="notice" role="status">A quiet place to notice patterns over time. Connect your Google account to load your journal directly, or open a local SQLite file. Nothing is stored on GitHub.</div>
 
 <section class="grid">
 <div class="card">
@@ -433,7 +433,7 @@ h1 {
 
 </section>
 
-<p class="notice small">Privacy: all SQLite processing occurs locally in your browser. Google Drive files are selected through your device’s file picker; no OAuth client ID is required. Nothing is sent to GitHub. This app currently reads your journal; it does not modify the original database.</p>
+<p class="notice small">Privacy: all SQLite processing occurs locally in your browser. Google Drive access uses a Google account consent popup and read-only permission. No OAuth client ID needs to be entered. Nothing is sent to GitHub. This app currently reads your journal; it does not modify the original database.</p>
 
 </main>
 
@@ -526,12 +526,133 @@ $('period').onchange=()=>records.length&&render();
 $('day').onchange=renderDay;
 $('search').oninput=renderEntries;
 $('mood').onchange=renderEntries;
-// The Android/Chrome system file picker can browse Google Drive accounts.
-// This avoids asking the user to configure a Google OAuth application.
-// Browsers do not permit a static site to silently read private Drive files.
+// Public Google OAuth web client ID. No client secret belongs in this app.
+const GOOGLE_CLIENT_ID =
+  '1010337679530-m9239mheeg2khrqq3a40mcmgnj42b2vv.apps.googleusercontent.com';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+const JOURNAL_FILENAMES = [
+  'feelings_journal_v3.sqlite',
+  'feelings_journal_v2.sqlite',
+  'feelings_journal.sqlite'
+];
+
+let driveTokenClient = null;
+
+function setStatus(message) {
+  $('status').textContent = message;
+}
+
+async function driveGet(url, token) {
+  const response = await fetch(url, {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+
+  if (!response.ok) {
+    let detail = '';
+    try {
+      const error = await response.json();
+      detail = error.error?.message || '';
+    } catch (_) {
+      // A non-JSON error response is still reported with its HTTP status.
+    }
+    throw new Error('Google Drive returned ' + response.status +
+      (detail ? ': ' + detail : ''));
+  }
+
+  return response;
+}
+
+async function findJournalFile(token) {
+  const matches = [];
+  let pageToken = '';
+
+  do {
+    const params = new URLSearchParams({
+      q: "trashed = false and (" +
+        JOURNAL_FILENAMES.map(name => "name = '" + name + "'").join(' or ') +
+        ")",
+      fields: 'nextPageToken,files(id,name,mimeType,modifiedTime,size)',
+      pageSize: '100',
+      orderBy: 'modifiedTime desc'
+    });
+
+    if (pageToken) params.set('pageToken', pageToken);
+
+    const response = await driveGet(
+      'https://www.googleapis.com/drive/v3/files?' + params, token
+    );
+    const result = await response.json();
+
+    matches.push(...(result.files || []));
+    pageToken = result.nextPageToken || '';
+  } while (pageToken);
+
+  // Prefer the authoritative v3 database, then older journal versions.
+  // For duplicate filenames, prefer the most recently modified copy.
+  matches.sort((a, b) => {
+    const versionDifference =
+      JOURNAL_FILENAMES.indexOf(a.name) - JOURNAL_FILENAMES.indexOf(b.name);
+    return versionDifference ||
+      (b.modifiedTime || '').localeCompare(a.modifiedTime || '');
+  });
+
+  return matches[0] || null;
+}
+
+async function loadJournalFromDrive(token) {
+  setStatus('Connected to Google. Looking for your SQLite journal…');
+
+  const file = await findJournalFile(token);
+  if (!file) {
+    throw new Error(
+      'No feelings_journal_v3.sqlite file was found in this Google account. ' +
+      'Check that you selected the account containing your journal.'
+    );
+  }
+
+  setStatus('Found ' + file.name + '. Loading your journal…');
+  const response = await driveGet(
+    'https://www.googleapis.com/drive/v3/files/' +
+      encodeURIComponent(file.id) + '?alt=media',
+    token
+  );
+
+  await load(await response.arrayBuffer(), 'Google Drive: ' + file.name);
+}
+
 $('drive').onclick = () => {
-  $('status').textContent = 'Select your Google Drive account in the file picker, then choose your private .sqlite journal file. On Android, open the file picker menu and select Drive.';
-  $('file').click();
+  if (!window.google?.accounts?.oauth2) {
+    setStatus('Google sign-in is still loading. Please try again.');
+    return;
+  }
+
+  if (!driveTokenClient) {
+    driveTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: GOOGLE_CLIENT_ID,
+      scope: DRIVE_SCOPE,
+      callback: async (response) => {
+        if (response.error || !response.access_token) {
+          setStatus('Google sign-in was not completed: ' +
+            (response.error_description || response.error || 'No access token'));
+          return;
+        }
+
+        try {
+          await loadJournalFromDrive(response.access_token);
+        } catch (error) {
+          setStatus('Could not load your Google Drive journal: ' + error.message);
+        }
+      },
+      error_callback: (error) => {
+        setStatus('Google sign-in did not finish: ' +
+          (error.message || error.type || 'Popup closed or blocked'));
+      }
+    });
+  }
+
+  setStatus('Opening Google account selection…');
+  // Called directly in a click handler to avoid popup blockers.
+  driveTokenClient.requestAccessToken({ prompt: 'select_account consent' });
 };
 </script></body>
 </html>
