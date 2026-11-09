@@ -10,7 +10,7 @@ The link above works once GitHub Pages is enabled for this repository (Settings 
 
 ## Using the app
 
-Open your private SQLite journal file using **Open SQLite file**, or select **Connect Google Drive** to authorize read-only access to your SQLite file in Google Drive. The Google Drive connection requires your own Google OAuth client ID.
+Select **Connect Google Drive** to open Google’s account picker and grant read-only access. The app automatically searches for `feelings_journal_v3.sqlite` (falling back to earlier versions). No OAuth client ID or Drive file ID needs to be entered. You can also use **Open SQLite file** to load a local copy.
 
 The dashboard shows mood trends, distribution, changes within a day, and searchable journal entries.
 
