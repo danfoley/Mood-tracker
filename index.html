@@ -639,42 +639,56 @@ function renderRecovery() {
   const dated = records.map(entry => ({ ...entry, at: recoveryTime(entry) }))
     .filter(entry => entry.at !== null && entry.rating != null)
     .sort((a, b) => a.at - b.at);
-  const episodes = [];
-  let active = null;
+  const byDay = new Map();
   for (const entry of dated) {
-    if (entry.rating === 1) {
-      if (!active) { active = { start: entry, better: null, good: null }; episodes.push(active); }
-      continue;
-    }
-    if (!active) continue;
-    if (entry.rating >= 2 && !active.better) active.better = entry;
-    if (entry.rating >= 4) { active.good = entry; active = null; }
+    if (!byDay.has(entry.date)) byDay.set(entry.date, []);
+    byDay.get(entry.date).push(entry);
   }
-  const times = key => episodes.filter(ep => ep[key]).map(ep => ep[key].at - ep.start.at);
+  const episodes = [];
+  for (const [day, entries] of byDay) {
+    let active = null;
+    for (const entry of entries) {
+      if (entry.rating === 1) {
+        if (!active) {
+          active = { day, start: entry, better: null, good: null };
+          episodes.push(active);
+        }
+      } else if (active) {
+        if (entry.rating >= 2 && !active.better) active.better = entry;
+        if (entry.rating >= 4) {
+          active.good = entry;
+          active = null;
+        }
+      }
+    }
+    // Never carry an unresolved Bad episode into the next calendar day.
+  }
+  const times = key => episodes.filter(ep => ep[key])
+    .map(ep => ep[key].at - ep.start.at)
+    .filter(ms => ms >= 0 && ms < 86400000);
   const better = times('better'), good = times('good');
   const average = values => durationLabel(values.reduce((a, b) => a + b, 0) / values.length);
   const summary = document.createElement('p');
   summary.className = 'sub';
   summary.textContent = episodes.length
-    ? 'First observed improvement: ' + (better.length ? average(better) + ' average (' + better.length + ' episodes)' : 'not observed') +
-      '. First observed Good / Great: ' + (good.length ? average(good) + ' average (' + good.length + ' episodes)' : 'not observed') + '.'
-    : 'No Bad-to-recovery episodes with usable observation times.';
+    ? 'Same-day first improvement: ' + (better.length ? average(better) + ' average (' + better.length + ' episodes)' : 'not observed') +
+      '. Same-day Good / Great: ' + (good.length ? average(good) + ' average (' + good.length + ' episodes)' : 'not observed') + '.'
+    : 'No same-day Bad episodes with usable observation times.';
   host.append(summary);
   for (const ep of episodes) {
     const item = document.createElement('p');
     item.className = 'entry';
-    const next = ep.good || ep.better;
-    const approximate = next && [ep.start, next].some(r =>
+    const approximate = [ep.start, ep.better, ep.good].filter(Boolean).some(r =>
       /retrospective|relative|approximate|interval|period/i.test(r.precision || ''));
-    item.textContent = ep.start.date + ' ' + ep.start.time +
-      ' — first improvement: ' + (ep.better ? durationLabel(ep.better.at - ep.start.at) : 'not observed') +
-      '; Good / Great: ' + (ep.good ? durationLabel(ep.good.at - ep.start.at) : 'not observed') +
-      (approximate ? ' (approximate: recorded times may not be event times)' : '');
+    item.textContent = ep.day + ' ' + ep.start.time +
+      ' — first improvement: ' + (ep.better ? durationLabel(ep.better.at - ep.start.at) : 'no same-day improvement recorded') +
+      '; Good / Great: ' + (ep.good ? durationLabel(ep.good.at - ep.start.at) : 'no same-day Good / Great recorded') +
+      (approximate ? ' (approximate observation time)' : '');
     host.append(item);
   }
   const caveat = document.createElement('p');
   caveat.className = 'small';
-  caveat.textContent = 'Elapsed time between journal observations is not necessarily the actual time it took to recover. Retrospective timestamps give approximate intervals only. Missing entries cannot be reconstructed from this chart.';
+  caveat.textContent = 'Each Bad episode is evaluated only against later observations on the same recorded calendar day. Overnight and following-day observations are excluded. Times show the interval between recorded observations, not necessarily the exact moment feelings changed.';
   host.append(caveat);
 }
 
