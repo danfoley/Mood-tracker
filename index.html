@@ -644,52 +644,34 @@ function renderRecovery() {
     if (!byDay.has(entry.date)) byDay.set(entry.date, []);
     byDay.get(entry.date).push(entry);
   }
-  const episodes = [];
-  for (const [day, entries] of byDay) {
-    let active = null;
-    for (const entry of entries) {
-      if (entry.rating === 1) {
-        if (!active) {
-          active = { day, start: entry, better: null, good: null };
-          episodes.push(active);
-        }
-      } else if (active) {
-        if (entry.rating >= 2 && !active.better) active.better = entry;
-        if (entry.rating >= 4) {
-          active.good = entry;
-          active = null;
-        }
-      }
+  const durations = [];
+  for (const entries of byDay.values()) {
+    const firstBad = entries.find(entry => entry.rating === 1);
+    if (!firstBad) continue;
+    // Better (3), Good (4), Great (5); Getting better (2) is not yet Better.
+    const recovered = entries.find(entry => entry.at > firstBad.at && entry.rating >= 3);
+    if (recovered) {
+      const elapsed = recovered.at - firstBad.at;
+      if (elapsed > 0 && elapsed < 86400000) durations.push(elapsed);
     }
-    // Never carry an unresolved Bad episode into the next calendar day.
   }
-  const times = key => episodes.filter(ep => ep[key])
-    .map(ep => ep[key].at - ep.start.at)
-    .filter(ms => ms >= 0 && ms < 86400000);
-  const better = times('better'), good = times('good');
-  const average = values => durationLabel(values.reduce((a, b) => a + b, 0) / values.length);
-  const summary = document.createElement('p');
-  summary.className = 'sub';
-  summary.textContent = episodes.length
-    ? 'Same-day first improvement: ' + (better.length ? average(better) + ' average (' + better.length + ' episodes)' : 'not observed') +
-      '. Same-day Good / Great: ' + (good.length ? average(good) + ' average (' + good.length + ' episodes)' : 'not observed') + '.'
-    : 'No same-day Bad episodes with usable observation times.';
-  host.append(summary);
-  for (const ep of episodes) {
-    const item = document.createElement('p');
-    item.className = 'entry';
-    const approximate = [ep.start, ep.better, ep.good].filter(Boolean).some(r =>
-      /retrospective|relative|approximate|interval|period/i.test(r.precision || ''));
-    item.textContent = ep.day + ' ' + ep.start.time +
-      ' — first improvement: ' + (ep.better ? durationLabel(ep.better.at - ep.start.at) : 'no same-day improvement recorded') +
-      '; Good / Great: ' + (ep.good ? durationLabel(ep.good.at - ep.start.at) : 'no same-day Good / Great recorded') +
-      (approximate ? ' (approximate observation time)' : '');
-    host.append(item);
+  const result = document.createElement('p');
+  result.className = 'sub';
+  if (durations.length) {
+    const average = durations.reduce((sum, value) => sum + value, 0) / durations.length;
+    result.textContent = durationLabel(average);
+    result.style.fontSize = '2rem';
+    result.style.fontWeight = '700';
+  } else {
+    result.textContent = 'Not enough same-day Bad-to-Better observations yet.';
   }
-  const caveat = document.createElement('p');
-  caveat.className = 'small';
-  caveat.textContent = 'Each Bad episode is evaluated only against later observations on the same recorded calendar day. Overnight and following-day observations are excluded. Times show the interval between recorded observations, not necessarily the exact moment feelings changed.';
-  host.append(caveat);
+  host.append(result);
+  const note = document.createElement('p');
+  note.className = 'small';
+  note.textContent = durations.length
+    ? 'Average across ' + durations.length + ' qualifying ' + (durations.length === 1 ? 'day' : 'days') + '. Days without both a Bad observation and a later Better, Good, or Great observation are excluded. Times may be approximate.'
+    : 'Only days with a recorded Bad observation followed by Better, Good, or Great later that same day count.';
+  host.append(note);
 }
 
 function renderDay() {
