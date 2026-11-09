@@ -444,7 +444,7 @@ h1 {
 'use strict';
 const $=id=>document.getElementById(id);
 let records=[],graphs={};
-const mapping={'bad':1,'very bad':1,'getting better':2,'okay':3,'ok':3,'better':3,'good':4,'very good':5,'great':5};
+const mapping={'bad':1,'very bad':1,'getting better':2,'better':3,'okay':3,'ok':3,'better':3,'good':4,'very good':5,'great':5};
 const qid=x=>'"'+String(x).replaceAll('"','""')+'"';
 const clean=v=>v==null?'':String(v);
 function date(v){let s=clean(v);
@@ -486,14 +486,14 @@ function readJournalV3(db) {
 
     return {
       date: timestamp.slice(0, 10),
-      time: (timestamp.match(/T(\\d{2}:\\d{2})/) || [])[1] || '',
+      time: (timestamp.match(/T(\d{2}:\d{2})/) || [])[1] || '',
       mood: moodLabel,
       note: String(description || summary || original || ''),
       rating: score,
       confidence: String(confidence || ''),
       source: 'observations'
     };
-  }).filter(entry => /^\\d{4}-\\d{2}-\\d{2}$/.test(entry.date));
+  }).filter(entry => /^\d{4}-\d{2}-\d{2}$/.test(entry.date));
 }
 
 function readDb(db){
