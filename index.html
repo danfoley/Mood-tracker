@@ -451,7 +451,58 @@ function date(v){let s=clean(v);
 return (s.match(/\d{4}-\d{2}-\d{2}/)||[])[0]||''}
 function moodScore(m){let s=clean(m).trim().toLowerCase();
 return Object.prototype.hasOwnProperty.call(mapping,s)?mapping[s]:null}
-function readDb(db){let tables=db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
+// The authoritative journal schema stores mood observations separately from messages.
+// Use observations as the unit of analysis so multiple feelings in one day are preserved.
+function readJournalV3(db) {
+  const tables = db.exec(
+    "SELECT name FROM sqlite_master WHERE type = 'table'"
+  )[0]?.values.map(row => row[0]) || [];
+
+  if (!tables.includes('observations') || !tables.includes('messages')) {
+    return null;
+  }
+
+  const query = db.exec(`
+    SELECT
+      o.observed_start_eastern,
+      o.mood_category,
+      o.description,
+      o.mood_confidence,
+      m.summary,
+      m.original_text,
+      m.submitted_eastern
+    FROM observations AS o
+    LEFT JOIN messages AS m ON m.id = o.message_id
+    ORDER BY o.observed_start_eastern, o.id
+  `);
+
+  if (!query.length) return [];
+
+  return query[0].values.map(row => {
+    const [observedAt, mood, description, confidence, summary, original, submittedAt] = row;
+    const timestamp = String(observedAt || submittedAt || '');
+    const moodLabel = String(mood || '').trim();
+    const score = moodScore(moodLabel);
+
+    return {
+      date: timestamp.slice(0, 10),
+      time: (timestamp.match(/T(\\d{2}:\\d{2})/) || [])[1] || '',
+      mood: moodLabel,
+      note: String(description || summary || original || ''),
+      rating: score,
+      confidence: String(confidence || ''),
+      source: 'observations'
+    };
+  }).filter(entry => /^\\d{4}-\\d{2}-\\d{2}$/.test(entry.date));
+}
+
+function readDb(db){
+const journalEntries = readJournalV3(db);
+if (journalEntries !== null) {
+  if (!journalEntries.length) throw new Error("The journal has no dated observations.");
+  return journalEntries;
+}
+let tables=db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
 let names=tables[0]?.values.map(x=>x[0])||[];
 let results=[];
 for(let table of names){let cols=db.exec('PRAGMA table_info('+qid(table)+')')[0]?.values.map(r=>String(r[1]))||[];
