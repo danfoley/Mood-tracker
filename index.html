@@ -1,31 +1,562 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Stillwater — Mood Tracker</title><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,600&display=swap" rel="stylesheet"><script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/sql-wasm.js"></script><script src="https://accounts.google.com/gsi/client" async defer></script><style>
-:root{font-family:'DM Sans',sans-serif;background:#f5f6f3;color:#273c3a}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 90% 0%,#e0eae2 0,transparent 37%),#f5f6f3;min-height:100vh}.shell{max-width:1120px;margin:auto;padding:clamp(18px,4vw,46px)}header{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;align-items:center;padding-bottom:26px;border-bottom:1px solid #d6ded8}h1{font-family:'Fraunces',Georgia,serif;font-weight:600;letter-spacing:-.04em;margin:0;font-size:clamp(35px,5vw,56px);line-height:1.12}h2{font-family:'Fraunces',Georgia,serif;font-weight:600;letter-spacing:-.025em;font-size:23px;margin:0 0 18px}.sub{color:#657874;font-size:14px;line-height:1.6}.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:17px;margin-top:23px}.card{grid-column:span 4;border:1px solid #e1e7df;background:#fffefa;border-radius:19px;padding:24px;box-shadow:0 8px 24px #2a473908}.card.wide{grid-column:1/-1}.card:has(#distribution),.card:has(#intraday){grid-column:span 6}.card:has(#trend){background:#fefefb}.stat{font-family:'Fraunces',Georgia,serif;font-size:42px;font-weight:600;margin-top:12px;line-height:1.1;color:#315d52}button{border:1px solid #315d52;background:#315d52;color:#fff;padding:12px 17px;border-radius:11px;cursor:pointer;font:600 13px 'DM Sans',sans-serif;transition:background .15s}button:hover{background:#244c42}button.alt{background:transparent;color:#315d52}button.alt:hover{background:#e6efe9}button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #a5bcae;outline-offset:2px}input,select{border:1px solid #d5dfd7;background:#fffefa;border-radius:10px;padding:11px;width:100%;font:inherit;color:#273c3a}label{display:block;margin:12px 0 5px;font-size:13px}.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.actions>*{flex:1;min-width:120px}.actions h2{margin:0}.plot{height:285px}.entry{border-top:1px solid #e6eae5;padding:17px 0}.entry p{white-space:pre-wrap;overflow-wrap:anywhere;margin:7px 0;line-height:1.65}.notice{padding:15px 18px;background:#e5eee8;border:1px solid #d6e3da;border-radius:12px;margin-top:23px;line-height:1.55}.hidden{display:none}dialog{border:1px solid #dce5df;border-radius:18px;max-width:95vw;box-shadow:0 20px 70px #1a2a4366;background:#fffefa;color:#273c3a}dialog form{width:min(440px,85vw)}.small{font-size:12px;color:#657874;line-height:1.6}.card .small{margin-bottom:0}#entries{max-height:600px;overflow:auto;scrollbar-color:#b5c7bb transparent}#status{font-size:14px}@media(max-width:760px){.card{grid-column:span 6}.card:has(#distribution),.card:has(#intraday){grid-column:1/-1}.shell{padding:18px}header{align-items:flex-start}.plot{height:235px}}@media(max-width:470px){.card{grid-column:1/-1;padding:19px}h1{font-size:37px}.actions>*{min-width:100px}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{transition:none!important;animation:none!important}}
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stillwater — Mood Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js">
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/sql-wasm.js">
+</script>
+<script src="https://accounts.google.com/gsi/client" async defer>
+</script><style>
+:root {
+  font-family:'DM Sans',sans-serif;
+  background:#f5f6f3;
+  color:#273c3a
+}
+
+* {
+  box-sizing:border-box
+}
+
+body {
+  margin:0;
+  background:radial-gradient(circle at 90% 0%,#e0eae2 0,transparent 37%),#f5f6f3;
+  min-height:100vh
+}
+
+.shell {
+  max-width:1120px;
+  margin:auto;
+  padding:clamp(18px,4vw,46px)
+}
+
+header {
+  display:flex;
+  justify-content:space-between;
+  gap:18px;
+  flex-wrap:wrap;
+  align-items:center;
+  padding-bottom:26px;
+  border-bottom:1px solid #d6ded8
+}
+
+h1 {
+  font-family:'Fraunces',Georgia,serif;
+  font-weight:600;
+  letter-spacing:-.04em;
+  margin:0;
+  font-size:clamp(35px,5vw,56px);
+  line-height:1.12
+}
+
+h2 {
+  font-family:'Fraunces',Georgia,serif;
+  font-weight:600;
+  letter-spacing:-.025em;
+  font-size:23px;
+  margin:0 0 18px
+}
+
+.sub {
+  color:#657874;
+  font-size:14px;
+  line-height:1.6
+}
+
+.grid {
+  display:grid;
+  grid-template-columns:repeat(12,minmax(0,1fr));
+  gap:17px;
+  margin-top:23px
+}
+
+.card {
+  grid-column:span 4;
+  border:1px solid #e1e7df;
+  background:#fffefa;
+  border-radius:19px;
+  padding:24px;
+  box-shadow:0 8px 24px #2a473908
+}
+
+.card.wide {
+  grid-column:1/-1
+}
+
+.card:has(#distribution),.card:has(#intraday) {
+  grid-column:span 6
+}
+
+.card:has(#trend) {
+  background:#fefefb
+}
+
+.stat {
+  font-family:'Fraunces',Georgia,serif;
+  font-size:42px;
+  font-weight:600;
+  margin-top:12px;
+  line-height:1.1;
+  color:#315d52
+}
+
+button {
+  border:1px solid #315d52;
+  background:#315d52;
+  color:#fff;
+  padding:12px 17px;
+  border-radius:11px;
+  cursor:pointer;
+  font:600 13px 'DM Sans',sans-serif;
+  transition:background .15s
+}
+
+button:hover {
+  background:#244c42
+}
+
+button.alt {
+  background:transparent;
+  color:#315d52
+}
+
+button.alt:hover {
+  background:#e6efe9
+}
+
+button:focus-visible,input:focus-visible,select:focus-visible {
+  outline:3px solid #a5bcae;
+  outline-offset:2px
+}
+
+input,select {
+  border:1px solid #d5dfd7;
+  background:#fffefa;
+  border-radius:10px;
+  padding:11px;
+  width:100%;
+  font:inherit;
+  color:#273c3a
+}
+
+label {
+  display:block;
+  margin:12px 0 5px;
+  font-size:13px
+}
+
+.actions {
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center
+}
+
+.actions>* {
+  flex:1;
+  min-width:120px
+}
+
+.actions h2 {
+  margin:0
+}
+
+.plot {
+  height:285px
+}
+
+.entry {
+  border-top:1px solid #e6eae5;
+  padding:17px 0
+}
+
+.entry p {
+  white-space:pre-wrap;
+  overflow-wrap:anywhere;
+  margin:7px 0;
+  line-height:1.65
+}
+
+.notice {
+  padding:15px 18px;
+  background:#e5eee8;
+  border:1px solid #d6e3da;
+  border-radius:12px;
+  margin-top:23px;
+  line-height:1.55
+}
+
+.hidden {
+  display:none
+}
+
+dialog {
+  border:1px solid #dce5df;
+  border-radius:18px;
+  max-width:95vw;
+  box-shadow:0 20px 70px #1a2a4366;
+  background:#fffefa;
+  color:#273c3a
+}
+
+dialog form {
+  width:min(440px,85vw)
+}
+
+.small {
+  font-size:12px;
+  color:#657874;
+  line-height:1.6
+}
+
+.card .small {
+  margin-bottom:0
+}
+
+#entries {
+  max-height:600px;
+  overflow:auto;
+  scrollbar-color:#b5c7bb transparent
+}
+
+#status {
+  font-size:14px
+}
+
+@media(max-width:760px) {
+  .card {
+  grid-column:span 6
+}
+
+.card:has(#distribution),.card:has(#intraday) {
+  grid-column:1/-1
+}
+
+.shell {
+  padding:18px
+}
+
+header {
+  align-items:flex-start
+}
+
+.plot {
+  height:235px
+}
+
+}
+
+@media(max-width:470px) {
+  .card {
+  grid-column:1/-1;
+  padding:19px
+}
+
+h1 {
+  font-size:37px
+}
+
+.actions>* {
+  min-width:100px
+}
+
+}
+
+@media(prefers-reduced-motion:reduce) {
+  *,*:before,*:after {
+  transition:none!important;
+  animation:none!important
+}
+
+}
 
 /* Mood-first hierarchy: the timeline is the primary reading surface, not another KPI card. */
-.card.primary-timeline{padding:clamp(22px,4vw,42px);border:1px solid #b7cec0;background:#fdfefb;box-shadow:none}.primary-timeline h2{font-size:clamp(28px,4vw,39px);line-height:1.15}.primary-timeline .plot{height:clamp(300px,40vw,440px)}.card:not(.primary-timeline){box-shadow:none}.card:has(.stat){background:transparent;border:0;border-top:2px solid #c7d9ce;border-radius:0;padding:18px 4px 12px}.card:has(.stat) .stat{font-size:35px}.card:has(.stat) .sub{font-size:13px}@media(max-width:760px){.primary-timeline .plot{height:300px}}
-</style></head><body><main class="shell"><header><div><h1>Stillwater <span aria-hidden="true" style="color:#8eae9d">✳</span></h1><div class="sub">Your mood journal, in perspective</div></div><div class="actions"><button id="drive">Connect Google Drive</button><button id="open" class="alt">Open SQLite file</button><input id="file" class="hidden" type="file" accept=".sqlite,.db,.sqlite3,application/octet-stream"></div></header>
+
+.card.primary-timeline {
+  padding:clamp(22px,4vw,42px);
+  border:1px solid #b7cec0;
+  background:#fdfefb;
+  box-shadow:none
+}
+
+.primary-timeline h2 {
+  font-size:clamp(28px,4vw,39px);
+  line-height:1.15
+}
+
+.primary-timeline .plot {
+  height:clamp(300px,40vw,440px)
+}
+
+.card:not(.primary-timeline) {
+  box-shadow:none
+}
+
+.card:has(.stat) {
+  background:transparent;
+  border:0;
+  border-top:2px solid #c7d9ce;
+  border-radius:0;
+  padding:18px 4px 12px
+}
+
+.card:has(.stat) .stat {
+  font-size:35px
+}
+
+.card:has(.stat) .sub {
+  font-size:13px
+}
+
+@media(max-width:760px) {
+  .primary-timeline .plot {
+  height:300px
+}
+
+}
+</style></head>
+<body>
+<main class="shell">
+<header>
+<div>
+<h1>Stillwater <span aria-hidden="true" style="color:#8eae9d">✳</span>
+</h1>
+
+<div class="sub">Your mood journal, in perspective</div>
+
+</div>
+
+<div class="actions">
+<button id="drive">Connect Google Drive</button>
+<button id="open" class="alt">Open SQLite file</button>
+<input id="file" class="hidden" type="file" accept=".sqlite,.db,.sqlite3,application/octet-stream">
+</div>
+
+</header>
+
 <div id="status" class="notice" role="status">A quiet place to notice patterns over time. Open your private journal to begin — nothing is stored on GitHub.</div>
-<section class="grid"><div class="card"><div class="sub">Journal entries</div><div class="stat" id="total">—</div></div><div class="card"><div class="sub">Days with entries</div><div class="stat" id="days">—</div></div><div class="card"><div class="sub">Mood observations</div><div class="stat" id="observations">—</div></div>
-<div class="card wide primary-timeline"><div class="actions"><h2 style="flex:3">The shape of your days</h2><select id="period"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="0">All entries</option></select></div><div class="plot"><canvas id="trend"></canvas></div><p class="small">Average of recorded mood ratings per day. Missing ratings are not interpreted as neutral.</p></div>
-<div class="card"><h2>How days have felt</h2><div class="plot"><canvas id="distribution"></canvas></div></div><div class="card"><h2>How feelings shift</h2><select id="day"></select><div class="plot"><canvas id="intraday"></canvas></div><p class="small">Only entries with recorded times and mood ratings appear.</p></div>
-<div class="card wide"><h2>Your journal</h2><div class="actions"><input id="search" placeholder="Search journal text"><select id="mood"><option value="">All moods</option></select></div><div id="entries" style="margin-top:15px"></div></div>
-<div class="card wide"><h2>What you expected, what happened</h2><p class="sub">Predictions and later outcomes need to be explicitly identified in your entries. The dashboard will not assume an outcome when no follow-up was recorded.</p><div id="comparison">No verified prediction/outcome pairs yet.</div></div></section>
-<p class="notice small">Privacy: all SQLite processing occurs locally in your browser. Google Drive is accessed only with your own Google authorization. Nothing is sent to GitHub. This app currently reads your journal; it does not modify the original database.</p></main>
-<dialog id="settings"><form method="dialog"><h2>Connect Google Drive</h2><p class="sub">Create a Google Cloud OAuth Web client for this site's origin, enable the Google Drive API, and authorize read-only access. The client ID is not a password.</p><label>OAuth client ID</label><input id="client" placeholder="...apps.googleusercontent.com"><label>SQLite file ID in Google Drive</label><input id="fileid" placeholder="ID from Drive file URL"><div class="actions" style="margin-top:18px"><button class="alt" value="cancel">Cancel</button><button id="authorize" value="connect">Sign in & load</button></div></form></dialog>
+
+<section class="grid">
+<div class="card">
+<div class="sub">Journal entries</div>
+
+<div class="stat" id="total">—</div>
+
+</div>
+
+<div class="card">
+<div class="sub">Days with entries</div>
+
+<div class="stat" id="days">—</div>
+
+</div>
+
+<div class="card">
+<div class="sub">Mood observations</div>
+
+<div class="stat" id="observations">—</div>
+
+</div>
+
+<div class="card wide primary-timeline">
+<div class="actions">
+<h2 style="flex:3">The shape of your days</h2>
+
+<select id="period">
+<option value="7">Last 7 days</option>
+<option value="30" selected>Last 30 days</option>
+<option value="0">All entries</option>
+</select>
+</div>
+
+<div class="plot">
+<canvas id="trend">
+</canvas>
+</div>
+
+<p class="small">Average of recorded mood ratings per day. Missing ratings are not interpreted as neutral.</p>
+
+</div>
+
+<div class="card">
+<h2>How days have felt</h2>
+
+<div class="plot">
+<canvas id="distribution">
+</canvas>
+</div>
+
+</div>
+
+<div class="card">
+<h2>How feelings shift</h2>
+
+<select id="day">
+</select>
+<div class="plot">
+<canvas id="intraday">
+</canvas>
+</div>
+
+<p class="small">Only entries with recorded times and mood ratings appear.</p>
+
+</div>
+
+<div class="card wide">
+<h2>Your journal</h2>
+
+<div class="actions">
+<input id="search" placeholder="Search journal text">
+<select id="mood">
+<option value="">All moods</option>
+</select>
+</div>
+
+<div id="entries" style="margin-top:15px">
+</div>
+
+</div>
+
+<div class="card wide">
+<h2>What you expected, what happened</h2>
+
+<p class="sub">Predictions and later outcomes need to be explicitly identified in your entries. The dashboard will not assume an outcome when no follow-up was recorded.</p>
+
+<div id="comparison">No verified prediction/outcome pairs yet.</div>
+
+</div>
+
+</section>
+
+<p class="notice small">Privacy: all SQLite processing occurs locally in your browser. Google Drive is accessed only with your own Google authorization. Nothing is sent to GitHub. This app currently reads your journal; it does not modify the original database.</p>
+
+</main>
+
+<dialog id="settings">
+<form method="dialog">
+<h2>Connect Google Drive</h2>
+
+<p class="sub">Create a Google Cloud OAuth Web client for this site's origin, enable the Google Drive API, and authorize read-only access. The client ID is not a password.</p>
+
+<label>OAuth client ID</label>
+<input id="client" placeholder="...apps.googleusercontent.com">
+<label>SQLite file ID in Google Drive</label>
+<input id="fileid" placeholder="ID from Drive file URL">
+<div class="actions" style="margin-top:18px">
+<button class="alt" value="cancel">Cancel</button>
+<button id="authorize" value="connect">Sign in & load</button>
+</div>
+
+</form>
+
+</dialog>
+
 <script>
-'use strict';const $=id=>document.getElementById(id);let records=[],graphs={};const mapping={'bad':1,'very bad':1,'getting better':2,'okay':3,'ok':3,'better':3,'good':4,'very good':5,'great':5};
+// Journal content stays in memory; no private records are committed to GitHub.
+'use strict';
+const $=id=>document.getElementById(id);
+let records=[],graphs={};
+const mapping={'bad':1,'very bad':1,'getting better':2,'okay':3,'ok':3,'better':3,'good':4,'very good':5,'great':5};
 const qid=x=>'"'+String(x).replaceAll('"','""')+'"';
 const clean=v=>v==null?'':String(v);
-function date(v){let s=clean(v);return (s.match(/\d{4}-\d{2}-\d{2}/)||[])[0]||''}
-function moodScore(m){let s=clean(m).trim().toLowerCase();return Object.prototype.hasOwnProperty.call(mapping,s)?mapping[s]:null}
-function readDb(db){let tables=db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");let names=tables[0]?.values.map(x=>x[0])||[];let results=[];for(let table of names){let cols=db.exec('PRAGMA table_info('+qid(table)+')')[0]?.values.map(r=>String(r[1]))||[];let lower=cols.map(c=>c.toLowerCase());let choose=(...patterns)=>{let i=lower.findIndex(c=>patterns.some(p=>c===p));return i>=0?cols[i]:null};let dateCol=choose('date','entry_date','created_at','timestamp','datetime','recorded_at','logged_at');let moodCol=choose('mood','mood_label','feeling','emotion','mood_category','rating','mood_rating','score');let noteCol=choose('note','notes','text','content','entry','journal','description','body');let timeCol=choose('time','entry_time');if(!dateCol||(!moodCol&&!noteCol))continue;let data=db.exec('SELECT * FROM '+qid(table));if(!data.length)continue;let ix=c=>c?data[0].columns.indexOf(c):-1;for(let row of data[0].values){let val=c=>ix(c)>=0?row[ix(c)]:'';let d=date(val(dateCol));if(!d)continue;let m=clean(val(moodCol));let numeric=Number(m);let rating=moodScore(m)??(m.trim()!==''&&Number.isFinite(numeric)&&numeric>=1&&numeric<=5?numeric:null);results.push({date:d,time:clean(val(timeCol))||clean(val(dateCol)).match(/\d{2}:\d{2}(?::\d{2})?/)?.[0]||'',mood:m,note:clean(val(noteCol)),rating,source:table})}}if(!results.length)throw Error('No recognized journal entries found. Database tables: '+names.join(', '));return results}
-async function load(bytes,label){try{let SQL=await initSqlJs({locateFile:file=>'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/'+file});let db=new SQL.Database(new Uint8Array(bytes));records=readDb(db);db.close();$('status').textContent='Loaded '+records.length+' entries from '+label+'. All data stays in your browser.';render()}catch(e){$('status').textContent='Could not load database: '+e.message}}
-function plot(id,type,labels,values,options={}){graphs[id]?.destroy();graphs[id]=new Chart($(id),{type,data:{labels,datasets:[{label:'Mood',data:values,borderColor:'#5676b0',backgroundColor:type==='doughnut'?['#b45d70','#dca36b','#7ca8bb','#70ab8e','#427d72']:'#5676b0',tension:.25,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:type==='doughnut'}},...options}})}
-function render(){let dates=[...new Set(records.map(x=>x.date))].sort();$('total').textContent=records.length;$('days').textContent=dates.length;$('observations').textContent=records.filter(x=>x.rating!=null).length;let max=dates.at(-1),period=Number($('period').value);let cutoff=period?new Date(max+'T12:00:00'):null;if(cutoff)cutoff.setDate(cutoff.getDate()-period+1);let shown=dates.filter(d=>!cutoff||new Date(d+'T12:00:00')>=cutoff);plot('trend','line',shown,shown.map(d=>{let a=records.filter(r=>r.date===d&&r.rating!=null).map(r=>r.rating);return a.length?a.reduce((x,y)=>x+y,0)/a.length:null}),{scales:{y:{min:1,max:5,ticks:{stepSize:1}}}});let labels=['Bad','Getting better','Better / okay','Good','Very good'];plot('distribution','doughnut',labels,[1,2,3,4,5].map(n=>records.filter(r=>r.rating===n).length));let old=$('day').value;$('day').replaceChildren(...dates.slice().reverse().map(d=>new Option(d,d)));if(dates.includes(old))$('day').value=old;let moods=[...new Set(records.map(r=>r.mood).filter(Boolean))].sort();let filter=$('mood').value;$('mood').replaceChildren(new Option('All moods',''),...moods.map(m=>new Option(m,m)));$('mood').value=filter;renderDay();renderEntries()}
-function renderDay(){let r=records.filter(x=>x.date===$('day').value&&x.time&&x.rating!=null).sort((a,b)=>a.time.localeCompare(b.time));plot('intraday','line',r.map(x=>x.time),r.map(x=>x.rating),{scales:{y:{min:1,max:5,ticks:{stepSize:1}}}})}
-function renderEntries(){let q=$('search').value.toLowerCase(),m=$('mood').value;let filtered=records.filter(r=>(!m||r.mood===m)&&(!q||(r.note+' '+r.date+' '+r.mood).toLowerCase().includes(q))).sort((a,b)=>(b.date+' '+b.time).localeCompare(a.date+' '+a.time));$('entries').replaceChildren(...filtered.slice(0,250).map(r=>{let div=document.createElement('div');div.className='entry';let head=document.createElement('div');head.className='small';head.textContent=r.date+(r.time?' • '+r.time:'')+' • '+(r.mood||'Unrated');let p=document.createElement('p');p.textContent=r.note;div.append(head,p);return div}));if(filtered.length>250){let p=document.createElement('p');p.textContent='Showing 250 of '+filtered.length+' matches';$('entries').append(p)}}
-$('open').onclick=()=>$('file').click();$('file').onchange=async e=>{let f=e.target.files[0];if(f)await load(await f.arrayBuffer(),f.name)};$('period').onchange=()=>records.length&&render();$('day').onchange=renderDay;$('search').oninput=renderEntries;$('mood').onchange=renderEntries;
-$('drive').onclick=()=>{$('client').value=localStorage.getItem('mood_oauth_client')||'';$('fileid').value=localStorage.getItem('mood_file_id')||'';$('settings').showModal()};
-$('authorize').onclick=e=>{e.preventDefault();let client=$('client').value.trim(),id=$('fileid').value.trim();if(!client||!id)return alert('Enter both fields');if(!window.google?.accounts?.oauth2)return alert('Google sign-in is loading. Please try again.');localStorage.setItem('mood_oauth_client',client);localStorage.setItem('mood_file_id',id);let auth=google.accounts.oauth2.initTokenClient({client_id:client,scope:'https://www.googleapis.com/auth/drive.readonly',callback:async result=>{if(result.error)return alert(result.error);try{let res=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media',{headers:{Authorization:'Bearer '+result.access_token}});if(!res.ok)throw Error('Drive returned '+res.status);await load(await res.arrayBuffer(),'private Google Drive SQLite');$('settings').close()}catch(err){$('status').textContent='Drive connection failed: '+err.message}}});auth.requestAccessToken()};
-</script></body></html>
+function date(v){let s=clean(v);
+return (s.match(/\d{4}-\d{2}-\d{2}/)||[])[0]||''}
+function moodScore(m){let s=clean(m).trim().toLowerCase();
+return Object.prototype.hasOwnProperty.call(mapping,s)?mapping[s]:null}
+function readDb(db){let tables=db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'");
+let names=tables[0]?.values.map(x=>x[0])||[];
+let results=[];
+for(let table of names){let cols=db.exec('PRAGMA table_info('+qid(table)+')')[0]?.values.map(r=>String(r[1]))||[];
+let lower=cols.map(c=>c.toLowerCase());
+let choose=(...patterns)=>{let i=lower.findIndex(c=>patterns.some(p=>c===p));
+return i>=0?cols[i]:null};
+let dateCol=choose('date','entry_date','created_at','timestamp','datetime','recorded_at','logged_at');
+let moodCol=choose('mood','mood_label','feeling','emotion','mood_category','rating','mood_rating','score');
+let noteCol=choose('note','notes','text','content','entry','journal','description','body');
+let timeCol=choose('time','entry_time');
+if(!dateCol||(!moodCol&&!noteCol))continue;
+let data=db.exec('SELECT * FROM '+qid(table));
+if(!data.length)continue;
+let ix=c=>c?data[0].columns.indexOf(c):-1;
+for(let row of data[0].values){let val=c=>ix(c)>=0?row[ix(c)]:'';
+let d=date(val(dateCol));
+if(!d)continue;
+let m=clean(val(moodCol));
+let numeric=Number(m);
+let rating=moodScore(m)??(m.trim()!==''&&Number.isFinite(numeric)&&numeric>=1&&numeric<=5?numeric:null);
+results.push({date:d,time:clean(val(timeCol))||clean(val(dateCol)).match(/\d{2}:\d{2}(?::\d{2})?/)?.[0]||'',mood:m,note:clean(val(noteCol)),rating,source:table})}}if(!results.length)throw Error('No recognized journal entries found. Database tables: '+names.join(', '));
+return results}
+async function load(bytes,label){try{let SQL=await initSqlJs({locateFile:file=>'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.12.0/'+file});
+let db=new SQL.Database(new Uint8Array(bytes));
+records=readDb(db);
+db.close();
+$('status').textContent='Loaded '+records.length+' entries from '+label+'. All data stays in your browser.';
+render()}catch(e){$('status').textContent='Could not load database: '+e.message}}
+function plot(id,type,labels,values,options={}){graphs[id]?.destroy();
+graphs[id]=new Chart($(id),{type,data:{labels,datasets:[{label:'Mood',data:values,borderColor:'#5676b0',backgroundColor:type==='doughnut'?['#b45d70','#dca36b','#7ca8bb','#70ab8e','#427d72']:'#5676b0',tension:.25,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:type==='doughnut'}},...options}})}
+function render(){let dates=[...new Set(records.map(x=>x.date))].sort();
+$('total').textContent=records.length;
+$('days').textContent=dates.length;
+$('observations').textContent=records.filter(x=>x.rating!=null).length;
+let max=dates.at(-1),period=Number($('period').value);
+let cutoff=period?new Date(max+'T12:00:00'):null;
+if(cutoff)cutoff.setDate(cutoff.getDate()-period+1);
+let shown=dates.filter(d=>!cutoff||new Date(d+'T12:00:00')>=cutoff);
+plot('trend','line',shown,shown.map(d=>{let a=records.filter(r=>r.date===d&&r.rating!=null).map(r=>r.rating);
+return a.length?a.reduce((x,y)=>x+y,0)/a.length:null}),{scales:{y:{min:1,max:5,ticks:{stepSize:1}}}});
+let labels=['Bad','Getting better','Better / okay','Good','Very good'];
+plot('distribution','doughnut',labels,[1,2,3,4,5].map(n=>records.filter(r=>r.rating===n).length));
+let old=$('day').value;
+$('day').replaceChildren(...dates.slice().reverse().map(d=>new Option(d,d)));
+if(dates.includes(old))$('day').value=old;
+let moods=[...new Set(records.map(r=>r.mood).filter(Boolean))].sort();
+let filter=$('mood').value;
+$('mood').replaceChildren(new Option('All moods',''),...moods.map(m=>new Option(m,m)));
+$('mood').value=filter;
+renderDay();
+renderEntries()}
+function renderDay(){let r=records.filter(x=>x.date===$('day').value&&x.time&&x.rating!=null).sort((a,b)=>a.time.localeCompare(b.time));
+plot('intraday','line',r.map(x=>x.time),r.map(x=>x.rating),{scales:{y:{min:1,max:5,ticks:{stepSize:1}}}})}
+function renderEntries(){let q=$('search').value.toLowerCase(),m=$('mood').value;
+let filtered=records.filter(r=>(!m||r.mood===m)&&(!q||(r.note+' '+r.date+' '+r.mood).toLowerCase().includes(q))).sort((a,b)=>(b.date+' '+b.time).localeCompare(a.date+' '+a.time));
+$('entries').replaceChildren(...filtered.slice(0,250).map(r=>{let div=document.createElement('div');
+div.className='entry';
+let head=document.createElement('div');
+head.className='small';
+head.textContent=r.date+(r.time?' • '+r.time:'')+' • '+(r.mood||'Unrated');
+let p=document.createElement('p');
+p.textContent=r.note;
+div.append(head,p);
+return div}));
+if(filtered.length>250){let p=document.createElement('p');
+p.textContent='Showing 250 of '+filtered.length+' matches';
+$('entries').append(p)}}
+$('open').onclick=()=>$('file').click();
+$('file').onchange=async e=>{let f=e.target.files[0];
+if(f)await load(await f.arrayBuffer(),f.name)};
+$('period').onchange=()=>records.length&&render();
+$('day').onchange=renderDay;
+$('search').oninput=renderEntries;
+$('mood').onchange=renderEntries;
+$('drive').onclick=()=>{$('client').value=localStorage.getItem('mood_oauth_client')||'';
+$('fileid').value=localStorage.getItem('mood_file_id')||'';
+$('settings').showModal()};
+$('authorize').onclick=e=>{e.preventDefault();
+let client=$('client').value.trim(),id=$('fileid').value.trim();
+if(!client||!id)return alert('Enter both fields');
+if(!window.google?.accounts?.oauth2)return alert('Google sign-in is loading. Please try again.');
+localStorage.setItem('mood_oauth_client',client);
+localStorage.setItem('mood_file_id',id);
+let auth=google.accounts.oauth2.initTokenClient({client_id:client,scope:'https://www.googleapis.com/auth/drive.readonly',callback:async result=>{if(result.error)return alert(result.error);
+try{let res=await fetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id)+'?alt=media',{headers:{Authorization:'Bearer '+result.access_token}});
+if(!res.ok)throw Error('Drive returned '+res.status);
+await load(await res.arrayBuffer(),'private Google Drive SQLite');
+$('settings').close()}catch(err){$('status').textContent='Drive connection failed: '+err.message}}});
+auth.requestAccessToken()};
+</script></body>
+</html>
