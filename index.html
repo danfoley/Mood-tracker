@@ -658,7 +658,7 @@ function renderWeather() {
   if(!byDay.has(r.date))byDay.set(r.date,[]);
   byDay.get(r.date).push(r.rating);
  }
- const valid=d=>d.status==='verified'||d.status==='complete'||d.status==='observed'||d.status==='final'||(!d.status&&['observed','reanalysis'].includes(d.source_type));
+ const valid=d=>['verified','partial_verified','complete','observed','final'].includes(d.status)||(!d.status&&['observed','reanalysis','station_observation'].includes(d.source_type));
  const matched=dailyWeather.filter(d=>valid(d)&&byDay.has(d.local_date)&&Number.isFinite(Number(d[metric]))&&d[metric]!==null).map(d=>({
   date:d.local_date,x:Number(d[metric]),y:byDay.get(d.local_date).reduce((a,b)=>a+b,0)/byDay.get(d.local_date).length,
   ratings:byDay.get(d.local_date),weather:d
